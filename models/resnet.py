@@ -126,7 +126,7 @@ class Bottleneck(nn.Module):
             print(f'query specific test')
             self.gcnet = 1
             self.pam = PAM_Module(planes * self.expansion)
-            # self.cam = CAM_Module(planes * self.expansion)
+            self.cam = CAM_Module(planes * self.expansion)
 
             # print(f'set gcb True')
             # self.gcnet = ContextBlock(planes * self.expansion,4)
@@ -151,9 +151,9 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         if self.gcnet is not None:
-            out = self.pam(out)
-            # channel_out = self.cam(out)
-            # out = spatial_out + channel_out
+            spatial_out = self.pam(out)
+            channel_out = self.cam(out)
+            out = spatial_out + channel_out
 
         if self.downsample is not None:
             identity = self.downsample(x)

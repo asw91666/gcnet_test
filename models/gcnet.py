@@ -3,9 +3,10 @@ from mmcv.cnn import constant_init, kaiming_init
 from torch import nn
 import torch.nn.functional as F
 import pdb
+import os
 
-def cosine_distance(input, isAttention=True):
-    cos = nn.CosineSimilarity(dim=0, eps=1e-10)
+def cosine_distance(input, isAttention=True, doWrite=False):
+    cos = nn.CosineSimilarity(dim=0, eps=1e-5)
     if isAttention:
         '''
         input : [B,C,C] or [B,HW,HW]
@@ -13,15 +14,18 @@ def cosine_distance(input, isAttention=True):
         _, channel, _ = input.size()
         x = input[0] # CxC
         sum = 0.0
-        # for i in range(channel):
-        #     for j in range(channel):
-        #         sum += (1 - cos(x[i], x[j]))/2.
-        # avg = sum / float(channel**2)
+        for i in range(channel):
+            for j in range(channel):
+                sum += (1 - cos(x[i], x[j]))/2.
+        avg = sum / float(channel**2)
 
-        for j in range(channel):
-            sum += (1 - cos(x[0], x[j]))/2.
-        avg = sum / float(channel)
+        # for j in range(channel):
+        #     sum += (1 - cos(x[0], x[j]))/2.
+        # avg = sum / float(channel)
 
+        if doWrite:
+            with open('att2.txt','a') as f:
+                f.write(f'{avg}\n')
     else:
         '''
         input : B,C,H,W
@@ -30,14 +34,19 @@ def cosine_distance(input, isAttention=True):
         x = input[0]
         x = x.view(channel,height*width).permute(1,0) # [HW,C]
         sum = 0.0
-        # for i in range(height*width):
-        #     for j in range(height*width):
-        #         sum += (1 - cos(x[i], x[j]))/2.
-        # avg = sum / float((height*width)**2)
+        for i in range(height*width):
+            for j in range(height*width):
+                sum += (1 - cos(x[i], x[j]))/2.
+        avg = sum / float((height*width)**2)
 
-        for j in range(height*width):
-            sum += (1 - cos(x[0], x[j]))/2.
-        avg = sum / float((height*width))
+        # for j in range(height*width):
+        #     sum += (1 - cos(x[0], x[j]))/2.
+        # avg = sum / float((height*width))
+
+        if doWrite:
+            with open('out2.txt','a') as f:
+                f.write(f'{avg}\n')
+
     return avg
 
 def last_zero_init(m):
@@ -369,14 +378,16 @@ class PAM_Module(nn.Module):
                 out : attention value + input feature
                 attention: B X (HxW) X (HxW)
         """
-        print(f'input : {cosine_distance(x, isAttention=False)}')
+        # print(f'input : {cosine_distance(x, isAttention=False)}')
+        # cosine_distance(x, isAttention=False, doWrite=True)
         m_batchsize, C, height, width = x.size()
         proj_query = self.query_conv(x).view(m_batchsize, -1, width*height).permute(0, 2, 1)
         proj_key = self.key_conv(x).view(m_batchsize, -1, width*height)
         energy = torch.bmm(proj_query, proj_key)
         attention = self.softmax(energy) # B X HW X HW
 
-        print(f'attention : {cosine_distance(attention,isAttention=True)}')
+        cosine_distance(attention, isAttention=True, doWrite=True)
+        # print(f'attention : {cosine_distance(attention,isAttention=True,doWrite=True)}')
         # pdb.set_trace()
         proj_value = self.value_conv(x).view(m_batchsize, -1, width*height)
 
@@ -384,8 +395,9 @@ class PAM_Module(nn.Module):
         out = out.view(m_batchsize, C, height, width)
 
         out = self.transform(out)
-        print(f'output : {cosine_distance(out, isAttention=False)}')
-        pdb.set_trace()
+        # cosine_distance(out, isAttention=False,doWrite=True)
+        # print(f'output : {cosine_distance(out, isAttention=False)}')
+        # pdb.set_trace()
         out = self.gamma*out + x
         return out
 
@@ -413,14 +425,14 @@ class CAM_Module(nn.Module):
                 out : attention value + input feature
                 attention: B X C X C
         """
-        print(f'input : {cosine_distance(x, isAttention=False)}')
+        # print(f'input : {cosine_distance(x, isAttention=False)}')
         m_batchsize, C, height, width = x.size()
         proj_query = x.view(m_batchsize, C, -1)
         proj_key = x.view(m_batchsize, C, -1).permute(0, 2, 1)
         energy = torch.bmm(proj_query, proj_key)
         # energy_new = torch.max(energy, -1, keepdim=True)[0].expand_as(energy)-energy
         attention = self.softmax(energy)
-        print(f'attention : {cosine_distance(attention,isAttention=True)}')
+        # print(f'attention : {cosine_distance(attention,isAttention=True)}')
         # pdb.set_trace()
         proj_value = x.view(m_batchsize, C, -1)
 
@@ -429,7 +441,7 @@ class CAM_Module(nn.Module):
         # print(f'output : {cosine_distance(out, isAttention=False)}')
         out = self.transform(out)
 
-        print(f'output : {cosine_distance(out, isAttention=False)}')
-        pdb.set_trace()
+        # print(f'output : {cosine_distance(out, isAttention=False)}')
+        # pdb.set_trace()
         out = self.gamma*out + x
         return out
